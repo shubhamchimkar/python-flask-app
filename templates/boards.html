@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Boards - {{ project.name }}</h2>
+
+<form action="/add_item/{{ project.id }}" method="POST" class="add-form">
+  <input type="text" name="title" placeholder="Work item title" required>
+  <textarea name="description" placeholder="Description" required></textarea>
+  <select name="type">
+    <option>Task</option>
+    <option>Bug</option>
+    <option>Epic</option>
+  </select>
+  <select name="priority">
+    <option>Low</option>
+    <option selected>Medium</option>
+    <option>High</option>
+  </select>
+  <button type="submit">Add Item</button>
+</form>
+
+<div class="kanban">
+  {% for status in ['To Do', 'In Progress', 'Done'] %}
+    <div class="kanban-column">
+      <h3>{{ status }}</h3>
+      {% for item in work_items if item.status == status %}
+        <div class="kanban-card">
+          <h4>{{ item.title }} ({{ item.type }})</h4>
+          <p>{{ item.description }}</p>
+          <form method="POST" action="/update_item/{{ item.id }}/{{ project.id }}">
+            <select name="status" onchange="this.form.submit()">
+              <option {% if item.status == 'To Do' %}selected{% endif %}>To Do</option>
+              <option {% if item.status == 'In Progress' %}selected{% endif %}>In Progress</option>
+              <option {% if item.status == 'Done' %}selected{% endif %}>Done</option>
+            </select>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,37 @@
+[
+    {
+      "name": "AUTHORITY",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "CLIENT_ID",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "CLIENT_SECRET",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "ENDPOINT",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "REDIRECT_URI",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "SCOPE",
+      "value": "",
+      "slotSetting": false
+    },
+    {
+      "name": "AUTH_ENABLED",
+      "value": "",
+      "slotSetting": false
+    }
+  ]

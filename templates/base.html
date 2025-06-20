@@ -1,0 +1,141 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Segoe+UI&display=swap');
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f3f3f3;
+      color: #333;
+    }
+
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 220px;
+      height: 100vh;
+      background-color: #0078d4;
+      color: white;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar h2 {
+      margin: 20px;
+      font-weight: 600;
+      font-size: 1.5rem;
+    }
+
+    .nav-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      flex-grow: 1;
+    }
+
+    .nav-links li {
+      margin: 10px 0;
+    }
+
+    .nav-links a {
+      color: white;
+      text-decoration: none;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+      border-left: 4px solid transparent;
+    }
+
+    .nav-links a:hover,
+    .nav-links a.active {
+      background-color: #005a9e;
+      border-left: 4px solid #ffba08;
+    }
+
+    .nav-links a svg {
+      margin-right: 12px;
+      width: 18px;
+      height: 18px;
+      fill: white;
+    }
+
+    .main {
+      margin-left: 220px;
+      padding: 20px;
+      min-height: 100vh;
+      background-color: white;
+    }
+
+    .topbar {
+      position: fixed;
+      left: 220px;
+      right: 0;
+      height: 50px;
+      background-color: #f3f3f3;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0 20px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .topbar .user-info {
+      font-weight: 600;
+      color: #0078d4;
+    }
+
+    .topbar .logout {
+      margin-left: 20px;
+      color: #0078d4;
+      cursor: pointer;
+      font-weight: 600;
+      text-decoration: underline;
+    }
+
+    h1, h2 {
+      margin-top: 70px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sidebar">
+    <h2>DevOps</h2>
+    <ul class="nav-links">
+      <li><a href="{{ url_for('dashboard') }}" class="{% if title == 'Dashboard' %}active{% endif %}">Dashboard</a></li>
+      <li><a href="{{ url_for('pipelines') }}" class="{% if title == 'Pipelines' %}active{% endif %}">Pipelines</a></li>
+      <li><a href="{{ url_for('dashboard') }}" class="{% if title == 'Boards' %}active{% endif %}">Boards</a></li>
+    </ul>
+  </div>
+
+  <div class="topbar">
+  <div class="user-info">
+    {% if user %}
+      Welcome, {{ user.get("name") }}
+    {% else %}
+      Welcome, Guest
+    {% endif %}
+    {% if selected_project %}
+      <span style="margin-left: 20px;">| Project: <strong>{{ selected_project.name }}</strong></span>
+    {% endif %}
+  </div>
+  <a href="{{ url_for('identity.logout') }}" class="logout">Logout</a>
+</div>
+
+  <div class="main">
+    {% block content %}{% endblock %}
+  </div>
+
+</body>
+</html>

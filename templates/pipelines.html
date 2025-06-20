@@ -1,0 +1,6 @@
+<h1>Pipelines — {{ project_name }}</h1>
+<ul>
+{% for p in pipelines %}
+  <li>{{ p.name }} (ID: {{ p.id }})</li>
+{% endfor %}
+</ul>
