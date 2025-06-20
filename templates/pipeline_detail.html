@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width: 500px; margin: 40px auto; background: #f9f9fb; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); padding: 32px;">
+    <h2 style="text-align:center; color: #3a3a5a; margin-bottom: 24px;">Pipeline Details</h2>
+    <div style="font-size: 1.1em; line-height: 1.7;">
+        <p><strong style="color:#5a5a8a;">Name:</strong> <span style="color:#222;">{{ pipeline.name }}</span></p>
+        <p><strong style="color:#5a5a8a;">ID:</strong> <span style="color:#222;">{{ pipeline.id }}</span></p>
+        <p><strong style="color:#5a5a8a;">Folder:</strong> <span style="color:#222;">{{ pipeline.folder or 'N/A' }}</span></p>
+    </div>
+</div>
+{% endblock %}

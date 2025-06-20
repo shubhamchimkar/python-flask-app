@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Pipeline YAML: {{ file_path }}</h2>
+<pre class="code-block">{{ yaml | e }}</pre>
+{% endblock %}

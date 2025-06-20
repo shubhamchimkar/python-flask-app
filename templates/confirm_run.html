@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Run Pipeline</h2>
+<p>Are you sure you want to run pipeline <strong>#{{ pipeline_id }}</strong>?</p>
+<form method="post">
+  <button type="submit" class="btn-small">Yes, Run</button>
+  <a href="{{ url_for('pipelines') }}" class="btn-small btn-secondary">Cancel</a>
+</form>
+{% endblock %}

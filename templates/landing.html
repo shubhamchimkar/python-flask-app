@@ -1,0 +1,66 @@
+<!-- templates/landing.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Azure DevOps Clone</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    body {
+      font-family: Segoe UI, sans-serif;
+      background: linear-gradient(145deg, #0078D4, #005A9E);
+      color: #fff;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    p {
+      font-size: 1.1rem;
+      max-width: 700px;
+      margin: auto;
+    }
+    .login-btn {
+      background: white;
+      color: #0078D4;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      border-radius: 6px;
+      margin-top: 25px;
+      cursor: pointer;
+    }
+    .features {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 60px;
+    }
+    .feature {
+      background: rgba(255,255,255,0.1);
+      padding: 20px;
+      margin: 10px;
+      border-radius: 12px;
+      width: 250px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    @media (max-width: 768px) {
+      .features { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Azure DevOps Clone</h1>
+  <p>Complete DevOps platform for planning work, collaborating on code development, and building and deploying applications.</p>
+  <a href="{{ app.auth_instance.get_login_redirect_url() }}"><button class="login-btn">Sign in with Azure</button></a>
+
+  <div class="features">
+    <div class="feature"><h3>Azure Pipelines</h3><p>Build, test, and deploy with CI/CD that works with any language or platform.</p></div>
+    <div class="feature"><h3>Azure Repos</h3><p>Unlimited private Git repos, pull requests, and code reviews.</p></div>
+    <div class="feature"><h3>Azure Boards</h3><p>Work tracking with Kanban boards, backlogs, and sprints.</p></div>
+  </div>
+</body>
+</html>

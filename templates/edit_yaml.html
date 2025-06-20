@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit Pipeline YAML — {{ file_path }}</h2>
+<form method="post">
+  <textarea name="yaml_content" rows="25" style="width:100%; font-family:monospace;">{{ yaml }}</textarea>
+  <br><br>
+  <button type="submit" class="btn-small">Save Changes</button>
+  <a href="{{ url_for('pipelines') }}" class="btn-small btn-secondary">Cancel</a>
+</form>
+{% endblock %}

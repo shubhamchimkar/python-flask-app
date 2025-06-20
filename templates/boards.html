@@ -1,42 +1,32 @@
 {% extends "base.html" %}
-
 {% block content %}
-<h2>Boards - {{ project.name }}</h2>
-
-<form action="/add_item/{{ project.id }}" method="POST" class="add-form">
-  <input type="text" name="title" placeholder="Work item title" required>
-  <textarea name="description" placeholder="Description" required></textarea>
-  <select name="type">
-    <option>Task</option>
-    <option>Bug</option>
-    <option>Epic</option>
-  </select>
-  <select name="priority">
-    <option>Low</option>
-    <option selected>Medium</option>
-    <option>High</option>
-  </select>
-  <button type="submit">Add Item</button>
-</form>
-
-<div class="kanban">
-  {% for status in ['To Do', 'In Progress', 'Done'] %}
-    <div class="kanban-column">
-      <h3>{{ status }}</h3>
-      {% for item in work_items if item.status == status %}
-        <div class="kanban-card">
-          <h4>{{ item.title }} ({{ item.type }})</h4>
-          <p>{{ item.description }}</p>
-          <form method="POST" action="/update_item/{{ item.id }}/{{ project.id }}">
-            <select name="status" onchange="this.form.submit()">
-              <option {% if item.status == 'To Do' %}selected{% endif %}>To Do</option>
-              <option {% if item.status == 'In Progress' %}selected{% endif %}>In Progress</option>
-              <option {% if item.status == 'Done' %}selected{% endif %}>Done</option>
-            </select>
-          </form>
-        </div>
-      {% endfor %}
+<h2 style="text-align:center; margin-bottom: 30px;">Boards — {{ selected_project }}</h2>
+<div class="board-container" style="display: flex; flex-wrap: wrap; gap: 24px; justify-content: center;">
+  {% for item in work_items %}
+    <div class="card" style="
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 20px 24px;
+      min-width: 220px;
+      max-width: 260px;
+      margin-bottom: 10px;
+      transition: transform 0.15s;
+      border-left: 6px solid #0078d4;
+    " onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+      <div style="font-size: 1.1em; color: #0078d4; font-weight: bold; margin-bottom: 8px;">
+        #{{ item.id }}
+      </div>
+      <div style="font-size: 1.15em; font-weight: 500; margin-bottom: 10px;">
+        {{ item.fields['System.Title'] }}
+      </div>
+      <div style="font-size: 0.98em; color: #666;">
+        <i>Status: {{ item.fields['System.State'] }}</i>
+      </div>
     </div>
   {% endfor %}
+  {% if not work_items %}
+    <p style="color: #888; font-size: 1.1em; margin-top: 40px;">No work items.</p>
+  {% endif %}
 </div>
 {% endblock %}

@@ -1,21 +1,28 @@
 import os
-import yaml
-from flask import Flask, render_template, request, redirect
+import base64
+import requests
+from flask import Flask, render_template, request, redirect, url_for, session
+from dotenv import load_dotenv
 from identity.flask import Auth
 import app_config
 from utils import optional_auth
-from models import db, WorkItem, Project
 
+# ------------------------- Load .env -------------------------
+load_dotenv()
+AZURE_ORG = os.getenv("AZURE_ORGANIZATION")
+AZURE_PAT = os.getenv("AZURE_DEVOPS_PAT")
+if not AZURE_ORG or not AZURE_PAT:
+    raise Exception("Please set .env ➜ AZURE_ORGANIZATION & AZURE_DEVOPS_PAT")
+
+API_BASE = f"https://dev.azure.com/{AZURE_ORG}"
+
+# ------------------------- App Config -------------------------
 app = Flask(__name__)
 app.config.from_object(app_config)
-
-# Secret & session
 app.secret_key = app.config.get('SECRET_KEY')
-app.config['SESSION_TYPE'] = app.config.get('SESSION_TYPE')
 
-# Azure AD Auth
-auth = Auth(
-    app,
+# ------------------------- Azure AD Auth -------------------------
+auth = Auth(app,
     authority=app.config["AUTHORITY"],
     client_id=app.config["CLIENT_ID"],
     client_credential=app.config["CLIENT_SECRET"],
@@ -23,129 +30,174 @@ auth = Auth(
 )
 app.auth_instance = auth
 
-# SQLAlchemy Setup
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///devops.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db.init_app(app)
+# ------------------------- Azure DevOps Helpers -------------------------
+def get_headers():
+    token = base64.b64encode(f":{AZURE_PAT}".encode()).decode()
+    return {
+        "Authorization": f"Basic {token}",
+        "Content-Type": "application/json"
+    }
 
-# ----------------------------------------------
-# Inject global variables into all templates
-# ----------------------------------------------
+def azure_get(path, params=None):
+    resp = requests.get(f"{API_BASE}/{path}", headers=get_headers(), params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+def azure_post(path, data):
+    resp = requests.post(f"{API_BASE}/{path}", headers=get_headers(), json=data)
+    resp.raise_for_status()
+    return resp.json()
+
+def azure_get_pipeline_details(pipeline_id):
+    project = session.get("project")
+    if not project:
+        raise Exception("No project selected")
+    return azure_get(f"{project}/_apis/pipelines/{pipeline_id}?api-version=7.1-preview.1")
+
+def azure_run_pipeline(pipeline_id):
+    project = session.get("project")
+    if not project:
+        raise Exception("No project selected")
+    return azure_post(f"{project}/_apis/pipelines/{pipeline_id}/runs?api-version=7.1-preview.1", {})
+
+# ------------------------- Context for templates -------------------------
 @app.context_processor
-def inject_common_context():
-    user = getattr(request, 'user_context', None)
-    projects = []
-    selected_project = None
+def inject_globals():
+    return dict(
+        user=session.get("user"),
+        selected_project=session.get("project")
+    )
 
-    if user:
-        projects = Project.query.filter_by(created_by=user['name']).all()
+# ------------------------- Routes -------------------------
+@app.route("/login")
+def login():
+    return redirect(app.auth_instance.get_login_redirect_url())
 
-        if request.path.startswith("/boards/") or (request.path.startswith("/pipelines") and request.args.get("project_id")):
-            try:
-                project_id = (
-                    request.view_args.get("project_id")
-                    if request.view_args and "project_id" in request.view_args
-                    else request.args.get("project_id")
-                )
-                if project_id:
-                    selected_project = Project.query.get(int(project_id))
-            except Exception:
-                selected_project = None
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("dashboard"))
 
-    return dict(projects=projects, selected_project=selected_project)
-
-# ---------------- DASHBOARD ---------------- #
 @app.route("/")
 @optional_auth
 def dashboard(*, context):
-    projects = Project.query.filter_by(created_by=context['user']['name']).all()
-    return render_template("dashboard.html", user=context['user'], title="Dashboard", projects=projects)
+    projects = azure_get("_apis/projects?api-version=7.1-preview.4").get("value", [])
+    return render_template("dashboard.html", title="Dashboard", projects=projects)
 
-@app.route("/create_project", methods=["POST"])
+@app.route("/select/<project>")
+def select_project(project):
+    session["project"] = project
+    return redirect(url_for("dashboard"))
+
+@app.route("/boards")
 @optional_auth
-def create_project(*, context):
-    project = Project(
-        name=request.form['name'],
-        description=request.form['description'],
-        created_by=context['user']['name']
-    )
-    db.session.add(project)
-    db.session.commit()
-    return redirect("/")
+def boards(*, context):
+    project = session.get("project")
+    if not project:
+        return redirect(url_for("dashboard"))
 
-# ---------------- BOARDS ---------------- #
-@app.route("/boards/<int:project_id>", methods=["GET"])
-@optional_auth
-def boards(project_id, *, context):
-    project = Project.query.get_or_404(project_id)
-    work_items = WorkItem.query.filter_by(project_id=project_id).all()
-    return render_template(
-        "boards.html",
-        title="Boards",
-        user=context['user'],
-        project=project,
-        work_items=work_items
-    )
+    wiql = {
+        "query": "SELECT [System.Id], [System.Title], [System.State] FROM WorkItems ORDER BY [System.CreatedDate] DESC"
+    }
 
-@app.route("/add_item/<int:project_id>", methods=["POST"])
-@optional_auth
-def add_item(project_id, *, context):
-    item = WorkItem(
-        project_id=project_id,
-        title=request.form['title'],
-        description=request.form['description'],
-        type=request.form['type'],
-        priority=request.form['priority'],
-        created_by=context['user']['name']
-    )
-    db.session.add(item)
-    db.session.commit()
-    return redirect(f"/boards/{project_id}")
+    result = azure_post(f"{project}/_apis/wit/wiql?api-version=7.1", wiql)
+    ids = [str(i["id"]) for i in result.get("workItems", [])][:20]
 
-@app.route("/update_item/<int:item_id>/<int:project_id>", methods=["POST"])
-@optional_auth
-def update_item(item_id, project_id, *, context):
-    item = WorkItem.query.get_or_404(item_id)
-    item.status = request.form['status']
-    db.session.commit()
-    return redirect(f"/boards/{project_id}")
+    if not ids:
+        return render_template("boards.html", title="Boards", work_items=[])
 
-# ---------------- PIPELINES ---------------- #
-@app.route("/pipelines", methods=["GET"])
+    items = azure_get(f"{project}/_apis/wit/workitems?ids={','.join(ids)}&api-version=7.1").get("value", [])
+    return render_template("boards.html", title="Boards", work_items=items)
+
+@app.route("/pipelines")
 @optional_auth
 def pipelines(*, context):
-    project_id = request.args.get("project_id")
-    return render_template(
-        "pipelines.html",
-        title="Pipelines",
-        user=context['user'],
-        project_id=project_id
+    project = session.get("project")
+    if not project:
+        return redirect(url_for("dashboard"))
+
+    pipelines = azure_get(f"{project}/_apis/pipelines?api-version=7.1-preview.1").get("value", [])
+
+    for p in pipelines:
+        runs = azure_get(f"{project}/_apis/pipelines/{p['id']}/runs?api-version=7.1-preview.1").get("value", [])
+        p["latest"] = runs[0] if runs else None
+
+    return render_template("pipelines.html", title="Pipelines", pipelines=pipelines)
+
+@app.route('/pipelines/<pipeline_id>')
+def view_pipeline(pipeline_id):
+    pipeline = azure_get_pipeline_details(pipeline_id)
+    return render_template('pipeline_detail.html', title="Pipeline Detail", pipeline=pipeline)
+
+@app.route('/pipelines/<pipeline_id>/run', methods=['POST', 'GET'])
+def run_pipeline(pipeline_id):
+    if request.method == 'POST':
+        azure_run_pipeline(pipeline_id)
+        return redirect(url_for('pipelines'))
+    return render_template('confirm_run.html', title="Run Pipeline", pipeline_id=pipeline_id)
+
+@app.route('/pipelines/<pipeline_id>/yaml', methods=['GET', 'POST'])
+def edit_pipeline_yaml(pipeline_id):
+    project = session.get("project")
+    if not project:
+        return redirect(url_for("dashboard"))
+
+    pipeline = azure_get(f"{project}/_apis/pipelines/{pipeline_id}?api-version=7.1-preview.1")
+    config = pipeline.get("configuration", {})
+    yaml_path = config.get("path")
+    repo = config.get("repository", {})
+    repo_id = repo.get("id")
+    repo_type = repo.get("type")
+    branch = repo.get("defaultBranch", "refs/heads/main").replace("refs/heads/", "")
+
+    if not yaml_path or not repo_id:
+        return "YAML path or repo info missing. Check if the pipeline uses a classic editor or non-azureReposGit source."
+
+    if repo_type != "azureReposGit":
+        return "Only azureReposGit is supported."
+
+    if request.method == 'POST':
+        new_content = request.form.get('yaml_content', '')
+
+        file_meta = azure_get(
+            f"{project}/_apis/git/repositories/{repo_id}/items",
+            params={"path": yaml_path, "includeContentMetadata": "true", "api-version": "7.1-preview"}
+        )
+
+        data = {
+            "refUpdates": [{
+                "name": f"refs/heads/{branch}",
+                "oldObjectId": file_meta.get("commitId")
+            }],
+            "commits": [{
+                "comment": f"Update pipeline YAML for pipeline ID {pipeline_id}",
+                "changes": [{
+                    "changeType": "edit",
+                    "item": { "path": yaml_path },
+                    "newContent": {
+                        "content": new_content,
+                        "contentType": "rawtext"
+                    }
+                }]
+            }]
+        }
+
+        azure_post(f"{project}/_apis/git/repositories/{repo_id}/pushes?api-version=7.1", data)
+        return redirect(url_for('pipelines'))
+
+    content_data = azure_get(
+        f"{project}/_apis/git/repositories/{repo_id}/items",
+        params={
+            "path": yaml_path,
+            "api-version": "7.1-preview",
+            "includeContent": "true"
+        }
     )
+    yaml_content = content_data.get("content", "")
+    return render_template("edit_yaml.html", title="Edit Pipeline YAML", yaml=yaml_content,
+                           file_path=yaml_path, pipeline_id=pipeline_id)
 
-@app.route("/upload_yaml", methods=["POST"])
-@optional_auth
-def upload_yaml(*, context):
-    project_id = request.args.get("project_id")
-    uploaded_file = request.files.get("yaml_file")
-    yaml_content = None
 
-    if uploaded_file:
-        yaml_str = uploaded_file.read().decode("utf-8")
-        try:
-            yaml_content = yaml.safe_load(yaml_str)
-        except Exception as e:
-            yaml_content = f"YAML parsing error: {e}"
-
-    return render_template(
-        "pipelines.html",
-        title="Pipelines",
-        yaml_content=yaml.dump(yaml_content, indent=2) if isinstance(yaml_content, dict) else yaml_content,
-        user=context['user'],
-        project_id=project_id
-    )
-
-# ---------------- RUN ---------------- #
+# ------------------------- Start -------------------------
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
