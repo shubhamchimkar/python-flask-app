@@ -1,4 +1,5 @@
 import os
+import logging
 import base64
 import requests
 from flask import Flask, render_template, request, redirect, url_for, session
@@ -35,18 +36,35 @@ def get_headers():
     token = base64.b64encode(f":{AZURE_PAT}".encode()).decode()
     return {
         "Authorization": f"Basic {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Accept": "application/json"
     }
 
 def azure_get(path, params=None):
-    resp = requests.get(f"{API_BASE}/{path}", headers=get_headers(), params=params)
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = requests.get(f"{API_BASE}/{path}", headers=get_headers(), params=params)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.JSONDecodeError as e:
+        logging.error(f"JSONDecodeError for GET {path}: {e}")
+        logging.error(f"Response text: {resp.text}")
+        return {}
+    except requests.exceptions.RequestException as e:
+        logging.error(f"RequestException for GET {path}: {e}")
+        return {}
 
 def azure_post(path, data):
-    resp = requests.post(f"{API_BASE}/{path}", headers=get_headers(), json=data)
-    resp.raise_for_status()
-    return resp.json()
+    try:
+        resp = requests.post(f"{API_BASE}/{path}", headers=get_headers(), json=data)
+        resp.raise_for_status()
+        return resp.json()
+    except requests.exceptions.JSONDecodeError as e:
+        logging.error(f"JSONDecodeError for POST {path}: {e}")
+        logging.error(f"Response text: {resp.text}")
+        return {}
+    except requests.exceptions.RequestException as e:
+        logging.error(f"RequestException for POST {path}: {e}")
+        return {}
 
 def azure_get_pipeline_details(pipeline_id):
     project = session.get("project")
@@ -159,15 +177,19 @@ def edit_pipeline_yaml(pipeline_id):
     if request.method == 'POST':
         new_content = request.form.get('yaml_content', '')
 
-        file_meta = azure_get(
-            f"{project}/_apis/git/repositories/{repo_id}/items",
-            params={"path": yaml_path, "includeContentMetadata": "true", "api-version": "7.1-preview"}
+        branch_ref = azure_get(
+            f"{project}/_apis/git/repositories/{repo_id}/refs",
+            params={"filter": f"heads/{branch}", "api-version": "7.1-preview"}
         )
+        old_object_id = branch_ref.get("value", [{}])[0].get("objectId")
+
+        if not old_object_id:
+            return "Could not determine latest commit for the branch.", 500
 
         data = {
             "refUpdates": [{
                 "name": f"refs/heads/{branch}",
-                "oldObjectId": file_meta.get("commitId")
+                "oldObjectId": old_object_id
             }],
             "commits": [{
                 "comment": f"Update pipeline YAML for pipeline ID {pipeline_id}",
@@ -185,15 +207,25 @@ def edit_pipeline_yaml(pipeline_id):
         azure_post(f"{project}/_apis/git/repositories/{repo_id}/pushes?api-version=7.1", data)
         return redirect(url_for('pipelines'))
 
-    content_data = azure_get(
+    # Get file metadata to find the blob ID (SHA)
+    item_metadata = azure_get(
         f"{project}/_apis/git/repositories/{repo_id}/items",
-        params={
-            "path": yaml_path,
-            "api-version": "7.1-preview",
-            "includeContent": "true"
-        }
+        params={"path": yaml_path, "api-version": "7.1"}
     )
-    yaml_content = content_data.get("content", "")
+    blob_id = item_metadata.get("objectId")
+
+    if not blob_id:
+        return "Could not find file in repository.", 500
+
+    # Get the raw file content from the blob endpoint
+    headers = get_headers()
+    headers["Accept"] = "text/plain"
+    content_resp = requests.get(
+        f"{API_BASE}/{project}/_apis/git/repositories/{repo_id}/blobs/{blob_id}?api-version=7.1",
+        headers=headers
+    )
+    content_resp.raise_for_status()
+    yaml_content = content_resp.text
     return render_template("edit_yaml.html", title="Edit Pipeline YAML", yaml=yaml_content,
                            file_path=yaml_path, pipeline_id=pipeline_id)
 
